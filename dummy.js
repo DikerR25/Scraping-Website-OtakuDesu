@@ -1585,6 +1585,7 @@ app.get('/api/list-banner', (req, res) => {
     res.json(data);
 
 });
+
 app.get('/api/search/?s:search&post_type=anime/', (req, res) => {
     const data = {
         "Status": "Success",
@@ -1604,6 +1605,7 @@ app.get('/api/search/?s:search&post_type=anime/', (req, res) => {
     res.json(data);
 
 });
+
 app.get('/api/app/status/', (req, res) => {
     const data = {
             "Status": "Success",

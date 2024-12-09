@@ -662,11 +662,12 @@ app.get('/api/genre-list/', async (req, res) => {
     }
 });
 
-app.get('/api/genres/:genre', async (req, res) => {
+app.get('/api/genres/:genre/page/:page', async (req, res) => {
     const genre = req.params.genre;
+    const page = req.params.page;
 
     try {
-        const url = `${baseURL}/genres/${genre}/`;
+        const url = page === 1 ? `${baseURL}/genres/${genre}/` : `${baseURL}/genres/${genre}/page/${page}/`; 
         const { data } = await axios.get(url);
         const $ = cheerio.load(data);
 
@@ -676,7 +677,6 @@ app.get('/api/genres/:genre', async (req, res) => {
         $('.col-md-4.col-anime-con').each((i, el) => {
             const parent = $(el);
 
-            // Mengambil data anime
             const title = parent.find('.col-anime-title a').text().trim();
             const animeUrl = parent.find('.col-anime-title a').attr('href');
             const studio = parent.find('.col-anime-studio').text().trim();
@@ -686,7 +686,6 @@ app.get('/api/genres/:genre', async (req, res) => {
             const synopsis = parent.find('.col-synopsis p').text().trim();
             const releaseDate = parent.find('.col-anime-date').text().trim();
 
-            // Memasukkan data anime ke dalam array GenreResult jika data tersedia
             if (title && animeUrl && studio && episodes && genres && coverImage) {
                 GenreResult.push({
                     title,
@@ -701,7 +700,24 @@ app.get('/api/genres/:genre', async (req, res) => {
             }
         });
 
-        res.json({ Status: 'Success', GenreResult });
+        // Mengambil semua angka halaman dari pagination
+        const pages = [];
+        $('.pagenavix .page-numbers').each((i, el) => {
+            const page = $(el).text().trim();
+            if (!isNaN(page)) {
+                pages.push(parseInt(page, 10)); // Hanya angka valid yang ditambahkan
+            }
+        });
+
+        // Menghitung max page
+        const maxPage = pages.length > 0 ? Math.max(...pages) : 1; // Default ke 1 jika tidak ditemukan
+
+        res.json({
+            Status: 'Success',
+            currentPage: parseInt(page, 10),
+            maxPage,
+            GenreResult
+        });
     } catch (error) {
         console.error(error);
         res.status(500).send('Error while scraping the website');
@@ -743,6 +759,44 @@ app.get('/api/schedule/', async (req, res) => {
     }
 });
 
+app.get('/api/search/:search', async (req, res) => {
+    const search = req.params.search;
+
+    try {
+        const url = `${baseURL}/?s=${search}&post_type=anime/`;
+        const { data } = await axios.get(url);
+        const $ = cheerio.load(data);
+
+        const SearchResult = [];
+
+        // Iterasi untuk mengambil semua anime
+        $('.chivsrc > li').each((i, el) => {
+            const parent = $(el);
+
+            // Mengambil data anime
+            const title = parent.find('h2 > a').text().trim();
+            const coverImage = parent.find('img').attr('src');
+            const status = parent.find('.set:contains("Status")').text().replace('Status :', '').trim();
+            const rating = parent.find('.set:contains("Rating")').text().replace('Rating :', '').trim();
+
+            // Memasukkan data anime ke dalam array SearchResult jika data tersedia
+            if (title && coverImage) {
+                SearchResult.push({
+                    title,
+                    coverImage,
+                    status,
+                    rating
+                });
+            }
+        });
+
+        res.json({ Status: 'Success', SearchResult });
+    } catch (error) {
+        console.error(error);
+        res.status(500).send('Error while scraping the website');
+    }
+});
+
 app.get('/api/list-banner', (req, res) => {
     const banners = [
         {
@@ -759,6 +813,17 @@ app.get('/api/list-banner', (req, res) => {
             imageUrl: 'https://gifdb.com/images/high/sad-anime-houtarou-oreki-q6hgcd04mwtpt2vj.gif',
             title: 'Find more than 10,000 Anime!',
             subtitle: 'Discover anime from all over the world.',
+        },
+    ];
+
+    res.json({ status: 'Success', banners });
+});
+
+app.get('/api/banner-search-page', (req, res) => {
+    const banners = [
+        {
+            imageUrl: 'https://64.media.tumblr.com/e8986c8f221ff6a87cec171a688e5434/80ff8dff197131f3-6b/s540x810/8813cf6359b4525bfd9fa390108ace03b87b9189.gif',
+            title: 'What you are looking for?',
         },
     ];
 
