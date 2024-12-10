@@ -9,19 +9,43 @@ const PORT = 3000;
 const baseURL = "https://otakudesu.cloud";
 
 app.get('/', (req, res) => {
-    res.send({ 
-        "message": "Welcome to Otaku Desu API",
-        "description": "This API is used to fetch anime information from Otaku Desu website",
-        "endpoints": [],
-        "routes": [],
-        "methods": [],
-        "status": 200,
-        "author": "DikerR25"
-    });
+    const code = req.headers['x-access-code'];
+    const validCode = '25102005';
+    
+    if (code !== validCode) {
+        return res.status(403).json({ message: 'Forbidden: Invalid access code' });
+    }
+    try{
+        res.send({ 
+            "message": "Welcome to Otaku Desu API",
+            "description": "This API is used to fetch anime information from Otaku Desu website",
+            "endpoints": [],
+            "routes": [],
+            "methods": [],
+            "status": 200,
+            "author": "DikerR25"
+        });
+    }catch (error) {
+        console.error(error);
+        res.status(500).send('Error while scraping the website');
+    }
+   
 });
 
 app.get('/api/listroute', (req, res) => {
-    res.send(`Welcome to the Anime Scraper API!`);
+    const code = req.headers['x-access-code'];
+    const validCode = '25102005';
+    
+    if (code !== validCode) {
+        return res.status(403).json({ message: 'Forbidden: Invalid access code' });
+    }
+    try{
+        res.send(`Welcome to the Anime Scraper API!`);
+    }catch (error) {
+        console.error(error);
+        res.status(500).send('Error while scraping the website');
+    }
+  
 });
 
 const getLastPageOngoing = async () => {
@@ -83,10 +107,19 @@ const extractEpisodeFromSlug = (url) => {
     }
 };
 
-
+const extractSlugGenreFromUrl = (url) => {
+    const match = url.match(/\/genres\/([^\/]+)/);
+    return match ? match[1] : null;
+};
 
 app.get('/api/ongoing/page/:page', async (req, res) => {
     const page = parseInt(req.params.page);
+    const code = req.headers['x-access-code'];
+
+    const validCode = '25102005';
+    if (code !== validCode) {
+        return res.status(403).json({ message: 'Forbidden: Invalid access code' });
+    }
 
     try {
         const lastPage = await getLastPageOngoing();
@@ -129,6 +162,12 @@ app.get('/api/ongoing/page/:page', async (req, res) => {
 
 app.get('/api/complete/page/:page', async (req, res) => {
     const page = parseInt(req.params.page); 
+    const code = req.headers['x-access-code'];
+
+    const validCode = '25102005';
+    if (code !== validCode) {
+        return res.status(403).json({ message: 'Forbidden: Invalid access code' });
+    }
 
     try {
         const lastPage = await getLastPageComplete();
@@ -170,21 +209,24 @@ app.get('/api/complete/page/:page', async (req, res) => {
 });
 
 app.get('/api/random', async (req, res) => {
+    const code = req.headers['x-access-code'];
+
+    const validCode = '25102005';
+    if (code !== validCode) {
+        return res.status(403).json({ message: 'Forbidden: Invalid access code' });
+    }
     try {
         const lastPageComplete = await getLastPageComplete();
         const lastPageOngoing = await getLastPageOngoing();
 
-        // Tentukan halaman acak untuk complete-anime dan ongoing-anime
         const randomPageComplete = Math.floor(Math.random() * Math.max((lastPageComplete - 1), 1)) + 2;
         const randomPageOngoing = Math.floor(Math.random() * Math.max((lastPageOngoing - 1), 1)) + 2;
 
-        // Pilih acak antara complete-anime dan ongoing-anime
-        const isComplete = Math.random() < 0.5;  // 50% kemungkinan untuk memilih complete-anime
+        const isComplete = Math.random() < 0.5; 
 
-        // Tentukan URL berdasarkan pilihan acak dan halaman acak
         const url = isComplete
-            ? (randomPageComplete === 2 ? `${baseURL}/complete-anime/` : `${baseURL}/complete-anime/page/${randomPageComplete}/`)
-            : (randomPageOngoing === 2 ? `${baseURL}/ongoing-anime/` : `${baseURL}/ongoing-anime/page/${randomPageOngoing}/`);
+            ? (randomPageComplete === 2 ? `${baseURL}/complete-anime/page/2` : `${baseURL}/complete-anime/page/${randomPageComplete}/`)
+            : (randomPageOngoing === 2 ? `${baseURL}/ongoing-anime/page/2` : `${baseURL}/ongoing-anime/page/${randomPageOngoing}/`);
 
         const { data } = await axios.get(url);
         const $ = cheerio.load(data);
@@ -211,7 +253,7 @@ app.get('/api/random', async (req, res) => {
 
         res.json({
             Status: 'Success',
-            currentPage: isComplete ? randomPageComplete : randomPageOngoing, // Menambahkan currentPage di respons
+            currentPage: isComplete ? randomPageComplete : randomPageOngoing,
             maxPage: { lastPageComplete, lastPageOngoing },
             Info: status,
             Anime: animeList
@@ -224,8 +266,13 @@ app.get('/api/random', async (req, res) => {
 
 app.get('/api/anime/:slug', async (req, res) => {
     const slug = req.params.slug;
+    const code = req.headers['x-access-code'];
+
+    const validCode = '25102005';
+    if (code !== validCode) {
+        return res.status(403).json({ message: 'Forbidden: Invalid access code' });
+    }
     
-    // Fungsi untuk mengganti nilai null atau undefined dengan 'none'
     const handleNull = (value) => (value === null || value === undefined ? 'none' : value);
 
     try {
@@ -246,19 +293,30 @@ app.get('/api/anime/:slug', async (req, res) => {
             durasi: handleNull($('.infozingle').text().match(/Durasi:\s*(.*?)(?=Tanggal Rilis:)/)?.[1].trim()),
             tanggal_rilis: handleNull($('.infozingle').text().match(/Tanggal Rilis:\s*(.*?)(?=Studio:)/)?.[1].trim()),
             studio: handleNull($('.infozingle').text().match(/Studio:\s*(.*?)(?=Genre:)/)?.[1].trim()),
-            genre: handleNull($('.infozingle').text().match(/Genre:\s*(.*)/)?.[1].trim()),
+            genre: $('.infozingle p span b:contains("Genre")').parent().find('a').map((i, el) => {
+                const link = $(el).attr('href');
+                const slug = link ? extractSlugGenreFromUrl(link) : null;
+                
+                return {
+                    genre: $(el).text().trim(),
+                    link: link,
+                    slug: slug
+                };
+            }).get(),
+            
+            
             season: 'Unknown',
             sinopsis: handleNull($('.sinopc').text().trim()),
             img_cover: handleNull($('.fotoanime img').attr('src')),
             img_bg: 'https://i.pinimg.com/originals/db/54/37/db5437539b009ea93def4dd29f0ca0fd.gif',
+
+           
         };
 
-        // Parsing daftar episode
         const episodes = [];
         $('.episodelist').each((_, episodelist) => {
             const title = $(episodelist).find('.smokelister .monktit').text();
         
-            // Cek apakah title mengandung "Episode List"
             if (title.includes('Episode List')) {
                 $(episodelist)
                     .find('ul li')
@@ -293,10 +351,8 @@ app.get('/api/anime/:slug', async (req, res) => {
     }
 });
 
-// Function Definitions
-
 function _epsQualityFunction(num, res) {
-    const $ = cheerio.load(res); // Use cheerio.load() to parse the HTML response
+    const $ = cheerio.load(res);
     const element = $(".download");
     const download_links = [];
     let qualityData;
@@ -318,7 +374,7 @@ function _epsQualityFunction(num, res) {
 }
 
 function _notFoundQualityHandler(res, num) {
-    const $ = cheerio.load(res); // Use cheerio.load() to parse the HTML response
+    const $ = cheerio.load(res); 
     const download_links = [];
     const element = $('.download');
     let qualityData;
@@ -356,18 +412,22 @@ function _notFoundQualityHandler(res, num) {
     return qualityData;
 }
 
-// Route Handler
 app.get('/api/episode/:episode', async (req, res) => {
     const episodeId = req.params.episode;
-    const url = `${baseURL}/episode/${episodeId}`;
+    const code = req.headers['x-access-code'];
+    const validCode = '25102005';
+
+    if (code !== validCode) {
+        return res.status(403).json({ message: 'Forbidden: Invalid access code' });
+    }
 
     try {
-        // Fetch data from the episode URL
+     
+        const url = `${baseURL}/episode/${episodeId}`;
         const { data } = await axios.get(url);
         const $ = cheerio.load(data);
         const streamElement = $("#lightsVideo").find("#embed_holder");
 
-        // Extract the shortlink ID and other data
         const id = $("link[rel='shortlink']").attr("href").match(/p=(\d+)/)[1];
         const title = $(".venutama > h1").text();
         const slug = $("div.flir > a:contains('Episodes')").attr("href")?.match(/\/anime\/([^\/]+)/)[1] || "-";
@@ -376,14 +436,12 @@ app.get('/api/episode/:episode', async (req, res) => {
         const prev_eps_slug = $("div.flir > a:contains('Previous')").attr("href")?.match(/\/episode\/([^\/]+)/)[1] || "-";
         const next_eps_slug = $("div.flir > a:contains('Next')").attr("href")?.match(/\/episode\/([^\/]+)/)[1] || "-";
 
-        // Initialize resolutions object to store streaming data
         const resolutions = {
             "360p": [],
             "480p": [],
             "720p": []
         };
 
-        // Extract episode list
         const episode_list = [];
         $("div.keyingpost > li").each((i, element) => {
             const dataEpsList = {
@@ -393,7 +451,6 @@ app.get('/api/episode/:episode', async (req, res) => {
             episode_list.push(dataEpsList);
         });
 
-        // Extract streaming data for each resolution
         $('#embed_holder > div.mirrorstream > ul.m360p > li').each((k, v) => {
             const driver = $(v).text();
             resolutions["360p"].push({
@@ -418,7 +475,6 @@ app.get('/api/episode/:episode', async (req, res) => {
             });
         });
 
-        // Handle download qualities
         let low_quality, medium_quality, high_quality;
         if ($('#venkonten > div.venser > div.venutama > div.download > ul > li:nth-child(1)').text() === '') {
             low_quality = _notFoundQualityHandler(data, 0);
@@ -430,7 +486,6 @@ app.get('/api/episode/:episode', async (req, res) => {
             high_quality = _epsQualityFunction(2, data);
         }
 
-        // Initialize mirror data
         const mirrorData = {};
         const titleMirror = $(".venutama > h1").text();
         const streamLink = $('#pembed > div > iframe').attr('src');
@@ -440,7 +495,6 @@ app.get('/api/episode/:episode', async (req, res) => {
             mirrorData.link_stream = streamLink;
         }
 
-        // Send the response with all the data
         res.json({
             id,
             title,
@@ -462,13 +516,19 @@ app.get('/api/episode/:episode', async (req, res) => {
 });
 
 app.get('/api/streaming/:link', async (req, res) => {
-    const link = req.params.link;  // Menerima parameter link langsung tanpa content
+    const link = req.params.link;  
+    const code = req.headers['x-access-code'];
+    const validCode = '25102005';
+    
+    if (code !== validCode) {
+        return res.status(403).json({ message: 'Forbidden: Invalid access code' });
+    }
     try {
         let nonce = await episodeHelper.getNonce();
 
-        const html_streaming = await episodeHelper.getUrlAjax(link, nonce); // Ganti content dengan link langsung
+        const html_streaming = await episodeHelper.getUrlAjax(link, nonce);
         const parse = cheerio.load(html_streaming);
-        const streamingLink = parse('iframe').attr('src'); // Mendapatkan src dari iframe
+        const streamingLink = parse('iframe').attr('src'); 
         const obj = {};
         obj.streaming_url = streamingLink;
 
@@ -494,7 +554,7 @@ const episodeHelper = {
                     'Referer': baseURL,
                     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:101.0) Gecko/20100101 Firefox/101.0',
                     'X-Requested-With': 'XMLHttpRequest',
-                    // 'Host': baseURL,
+                    'Host': baseURL,
                     'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
                 }
             })
@@ -522,7 +582,7 @@ const episodeHelper = {
                     'Referer': baseURL,
                     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:101.0) Gecko/20100101 Firefox/101.0',
                     'X-Requested-With': 'XMLHttpRequest',
-                    // 'Host': baseURL,
+                    'Host': baseURL,
                     'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
                 }
             })
@@ -640,6 +700,12 @@ const episodeHelper = {
 module.exports = episodeHelper
 
 app.get('/api/genre-list/', async (req, res) => {
+    const code = req.headers['x-access-code'];
+    const validCode = '25102005';
+    
+    if (code !== validCode) {
+        return res.status(403).json({ message: 'Forbidden: Invalid access code' });
+    }
     try {
         const url = `${baseURL}/genre-list/`;
         const { data } = await axios.get(url);
@@ -649,9 +715,11 @@ app.get('/api/genre-list/', async (req, res) => {
 
         $('ul.genres a').each((i, el) => {
             const genre = $(el).text().trim();
+            const link = $(el).attr("href");
+            const slug = link ? extractSlugGenreFromUrl(link) : null;
 
-            if (genre) {
-                genreList.push({ genre });
+            if (genre && slug) {
+                genreList.push({ genre , slug });
             }
         });
 
@@ -665,6 +733,12 @@ app.get('/api/genre-list/', async (req, res) => {
 app.get('/api/genres/:genre/page/:page', async (req, res) => {
     const genre = req.params.genre;
     const page = req.params.page;
+    const code = req.headers['x-access-code'];
+    const validCode = '25102005';
+    
+    if (code !== validCode) {
+        return res.status(403).json({ message: 'Forbidden: Invalid access code' });
+    }
 
     try {
         const url = page === 1 ? `${baseURL}/genres/${genre}/` : `${baseURL}/genres/${genre}/page/${page}/`; 
@@ -673,44 +747,58 @@ app.get('/api/genres/:genre/page/:page', async (req, res) => {
 
         const GenreResult = [];
 
-        // Iterasi untuk mengambil semua anime dalam genre
         $('.col-md-4.col-anime-con').each((i, el) => {
             const parent = $(el);
 
             const title = parent.find('.col-anime-title a').text().trim();
             const animeUrl = parent.find('.col-anime-title a').attr('href');
             const studio = parent.find('.col-anime-studio').text().trim();
+            const rating = parent.find('.col-anime-rating').text().trim();
             const episodes = parent.find('.col-anime-eps').text().trim();
-            const genres = parent.find('.col-anime-genre').text().trim();
+          
             const coverImage = parent.find('.col-anime-cover img').attr('src');
             const synopsis = parent.find('.col-synopsis p').text().trim();
-            const releaseDate = parent.find('.col-anime-date').text().trim();
+            const season = parent.find('.col-anime-date').text().trim();
 
-            if (title && animeUrl && studio && episodes && genres && coverImage) {
+            const slug = animeUrl ? extractSlugFromUrl(animeUrl) : null;
+
+            const genreList = [];
+
+            parent.find('.col-anime-genre a').each((i, el) => {
+                const genre = $(el).text().trim();
+                const link = $(el).attr('href');
+                const slug = link ? extractSlugGenreFromUrl(link) : null;
+
+                if (genre && slug) {
+                    genreList.push({ genre, slug });
+                }
+            });
+
+
+            if (title && slug && studio && episodes && rating && genreList && coverImage) {
                 GenreResult.push({
                     title,
-                    animeUrl,
+                    slug,
                     studio,
                     episodes,
-                    genres,
+                    rating,
+                    genreList,
                     coverImage,
                     synopsis,
-                    releaseDate,
+                    season,
                 });
             }
         });
 
-        // Mengambil semua angka halaman dari pagination
         const pages = [];
         $('.pagenavix .page-numbers').each((i, el) => {
             const page = $(el).text().trim();
             if (!isNaN(page)) {
-                pages.push(parseInt(page, 10)); // Hanya angka valid yang ditambahkan
+                pages.push(parseInt(page, 10)); 
             }
         });
 
-        // Menghitung max page
-        const maxPage = pages.length > 0 ? Math.max(...pages) : 1; // Default ke 1 jika tidak ditemukan
+        const maxPage = pages.length > 0 ? Math.max(...pages) : 1; 
 
         res.json({
             Status: 'Success',
@@ -725,33 +813,34 @@ app.get('/api/genres/:genre/page/:page', async (req, res) => {
 });
 
 app.get('/api/schedule/', async (req, res) => {
+    const code = req.headers['x-access-code'];
+    const validCode = '25102005';
+    
+    if (code !== validCode) {
+        return res.status(403).json({ message: 'Forbidden: Invalid access code' });
+    }
     try {
-        // Fetch the HTML content from the URL
+       
         const { data } = await axios.get(`${baseURL}/jadwal-rilis/`);
         
-        // Load the HTML data into Cheerio
         const $ = cheerio.load(data);
 
-        // Create an object to store the schedule
         const schedule = {};
 
-        // Loop through each day's schedule and extract data
         $('div.kglist321').each((index, element) => {
-            const day = $(element).find('h2').text(); // Get the day name (e.g., Senin, Selasa)
+            const day = $(element).find('h2').text(); 
             const animes = [];
 
             $(element).find('ul li a').each((i, anime) => {
-                const title = $(anime).text(); // Anime title
-                const link = $(anime).attr('href'); // Anime link
+                const title = $(anime).text(); 
+                const link = $(anime).attr('href'); 
                 const slug = link ? extractSlugFromUrl(link) : null;
                 animes.push({ title, slug });
             });
 
-            // Add the extracted data to the schedule object
             schedule[day] = animes;
         });
 
-        // Send the schedule as JSON response
         res.json( { Status: 'Success', Schedule: schedule } );
     } catch (error) {
         console.error(error);
@@ -761,31 +850,40 @@ app.get('/api/schedule/', async (req, res) => {
 
 app.get('/api/search/:search', async (req, res) => {
     const search = req.params.search;
+    const code = req.headers['x-access-code'];
+    const validCode = '25102005';
+    
+    if (code !== validCode) {
+        return res.status(403).json({ message: 'Forbidden: Invalid access code' });
+    }
 
     try {
-        const url = `${baseURL}/?s=${search}&post_type=anime/`;
+        const url = `${baseURL}/?s=${search}&post_type=anime`;
         const { data } = await axios.get(url);
         const $ = cheerio.load(data);
 
         const SearchResult = [];
 
-        // Iterasi untuk mengambil semua anime
         $('.chivsrc > li').each((i, el) => {
             const parent = $(el);
 
-            // Mengambil data anime
             const title = parent.find('h2 > a').text().trim();
             const coverImage = parent.find('img').attr('src');
+            const link = parent.find('a').attr('href');
             const status = parent.find('.set:contains("Status")').text().replace('Status :', '').trim();
             const rating = parent.find('.set:contains("Rating")').text().replace('Rating :', '').trim();
+            const genre = parent.find('.set:contains("Genres")').text().replace('Genres :', '').trim();
 
-            // Memasukkan data anime ke dalam array SearchResult jika data tersedia
+            const slug = link ? extractSlugFromUrl(link) : null;
+         
             if (title && coverImage) {
                 SearchResult.push({
                     title,
                     coverImage,
                     status,
-                    rating
+                    rating,
+                    genre,
+                    slug
                 });
             }
         });
@@ -798,6 +896,12 @@ app.get('/api/search/:search', async (req, res) => {
 });
 
 app.get('/api/list-banner', (req, res) => {
+    const code = req.headers['x-access-code'];
+    const validCode = '25102005';
+    
+    if (code !== validCode) {
+        return res.status(403).json({ message: 'Forbidden: Invalid access code' });
+    }
     const banners = [
         {
             imageUrl: 'https://wallpapers-clan.com/wp-content/uploads/2024/04/asuka-evangelion-pink-anime-gif-preview-desktop-wallpaper.gif',
@@ -820,6 +924,12 @@ app.get('/api/list-banner', (req, res) => {
 });
 
 app.get('/api/banner-search-page', (req, res) => {
+    const code = req.headers['x-access-code'];
+    const validCode = '25102005';
+    
+    if (code !== validCode) {
+        return res.status(403).json({ message: 'Forbidden: Invalid access code' });
+    }
     const banners = [
         {
             imageUrl: 'https://64.media.tumblr.com/e8986c8f221ff6a87cec171a688e5434/80ff8dff197131f3-6b/s540x810/8813cf6359b4525bfd9fa390108ace03b87b9189.gif',

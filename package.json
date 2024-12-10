@@ -2,9 +2,9 @@
   "name": "otakudesu-api",
   "version": "1.0.0",
   "description": "OtakuDesu API",
-  "main": "api/index.js",
+  "main": "api/config.js",
   "scripts": {
-    "start": "node api/index.js"
+    "start": "node api/config.js"
   },
   "dependencies": {
     "axios": "^1.7.8",
